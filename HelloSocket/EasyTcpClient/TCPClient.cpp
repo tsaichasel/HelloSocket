@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN	
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 
 #include <Windows.h>
 #include <WinSock2.h>
@@ -35,7 +36,9 @@ enum BackGroundColor
 
 enum CMD {
 	CMD_LOGIN,
+	CMD_LOGIN_RESULT,
 	CMD_LOGOUT,
+	CMD_LOGOUT_RESULT,
 	CMD_ERROR
 };
 
@@ -44,20 +47,38 @@ struct DataHeader {
 	short Cmd;
 };
 
-struct Login {
+struct Login : public DataHeader {
+	Login() {
+		DataLength = sizeof(Login);
+		Cmd = CMD_LOGIN;
+	}
 	char UserName[32];
 	char PassWord[32];
 };
 
-struct LoginResult {
+struct LoginResult : public DataHeader {
+	LoginResult() {
+		DataLength = sizeof(LoginResult);
+		Cmd = CMD_LOGIN_RESULT;
+		Result = 0;
+	}
 	int Result;
 };
 
-struct Logout {
+struct Logout : public DataHeader {
+	Logout() {
+		DataLength = sizeof(Logout);
+		Cmd = CMD_LOGOUT;
+	}
 	char UserName[32];
 };
 
-struct LogoutResult {
+struct LogoutResult : public DataHeader {
+	LogoutResult() {
+		DataLength = sizeof(LogoutResult);
+		Cmd = CMD_LOGOUT_RESULT;
+		Result = 0;
+	}
 	int Result;
 };
 
@@ -111,31 +132,31 @@ int main() {
 		}
 		else if (0 == strcmp(CmdBuf, "login")) {
 			// 5 向服务器发送命令
-			DataHeader dh{ sizeof(Login), CMD_LOGIN};
-			Login login{"Tsai","tsai"};
-			send(SockCli, (const char*)&dh, sizeof(dh), 0);
+			Login login;
+			login.Cmd = CMD_LOGIN;
+			login.DataLength = sizeof(login);
+			strcpy(login.UserName, "Tsai");
+			strcpy(login.PassWord, "MyPassword");
 			send(SockCli, (const char*)&login, sizeof(login), 0);
+			
 			// 6 接收服务器信息 recv
-			DataHeader retHeader{};
-			LoginResult loginret{};
+			LoginResult loginret;
 			int nLen;
-			nLen = recv(SockCli, (char*)&retHeader, sizeof(retHeader), 0);
 			nLen = recv(SockCli, (char*)&loginret, sizeof(loginret), 0);
 			SetColor(enmCFC_HighWhite, enmCBC_Black);
 			std::cout << " --- Server 回应 ： LoginResult : " << loginret.Result << std::endl;
-
 		}
 		else if (0 == strcmp(CmdBuf, "logout")) {
 			// 5 向服务器发送命令
-			DataHeader dh{ sizeof(Logout), CMD_LOGOUT};
-			Login logout{ "Tsai"};
-			send(SockCli, (const char*)&dh, sizeof(dh), 0);
+			Logout logout;
+			logout.Cmd = CMD_LOGOUT;
+			logout.DataLength = sizeof(logout);
+			strcpy(logout.UserName, "Tsai");
 			send(SockCli, (const char*)&logout, sizeof(logout), 0);
+			
 			// 6 接收服务器信息 recv
-			DataHeader retHeader{};
-			LogoutResult logoutret{};
+			LogoutResult logoutret;
 			int nLen;
-			nLen = recv(SockCli, (char*)&retHeader, sizeof(retHeader), 0);
 			nLen = recv(SockCli, (char*)&logoutret, sizeof(logoutret), 0);
 			SetColor(enmCFC_HighWhite, enmCBC_Black);
 			std::cout << " --- Server 回应 ： LogoutResult : " << logoutret.Result << std::endl;
