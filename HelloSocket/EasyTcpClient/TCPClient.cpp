@@ -6,7 +6,6 @@
 #include <iostream>
 #pragma comment(lib,"ws2_32.lib")
 
-
 enum ForegroundColor
 {
 	enmCFC_Red = FOREGROUND_INTENSITY | FOREGROUND_RED,
@@ -32,6 +31,11 @@ enum BackGroundColor
 	enmCBC_White = BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE,
 	enmCBC_HighWhite = BACKGROUND_INTENSITY | BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE,
 	enmCBC_Black = 0,
+};
+
+struct DataPackage {
+	int age;
+	char name[32];
 };
 
 void SetColor(ForegroundColor foreColor, BackGroundColor backColor);
@@ -87,9 +91,11 @@ int main() {
 		// 3 接收服务器信息 recv
 		char RecvBuf[256] = {};
 		int nLen = recv(SockCli, RecvBuf, 256, 0);
+		DataPackage* RecvInfo = (DataPackage*)RecvBuf;
 		if (nLen > 0) {
 			SetColor(enmCFC_HighWhite, enmCBC_Black);
-			std::cout << " --- Server 回应 ：" << RecvBuf << std::endl;
+			std::cout << " --- Server 回应 ：Age = " << RecvInfo->age 
+				<< " Years old; Name = " << RecvInfo->name << std::endl;
 		}
 	}
 

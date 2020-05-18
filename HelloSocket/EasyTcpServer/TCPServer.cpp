@@ -35,6 +35,11 @@ enum BackGroundColor
 	enmCBC_Black = 0,
 };
 
+struct DataPackage {
+	int age;
+	char name[32];
+};
+
 void SetColor(ForegroundColor foreColor, BackGroundColor backColor);
 
 int main() {
@@ -105,13 +110,9 @@ int main() {
 		SetColor(enmCFC_HighWhite, enmCBC_Black);
 		std::cout << " --- Client ÇëÇó £º" << RecvBuf << std::endl;
 
-		if (0 == strcmp(RecvBuf, "getName")) {
-			char SendBuf[] = "I am Server~";
-			send(Client, SendBuf, sizeof(SendBuf) + 1, 0);
-		}
-		else if (0 == strcmp(RecvBuf, "getAge")) {
-			char SendBuf[] = "I am 80";
-			send(Client, SendBuf, sizeof(SendBuf) + 1, 0);
+		if (0 == strcmp(RecvBuf, "getInfo")) {
+			DataPackage SendInfo{80,"Server"};
+			send(Client, (const char*)&SendInfo, sizeof(DataPackage) , 0);
 		}
 		else {
 			char SendBuf[] = "?????";
