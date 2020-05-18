@@ -35,10 +35,34 @@ enum BackGroundColor
 	enmCBC_Black = 0,
 };
 
-struct DataPackage {
-	int age;
-	char name[32];
+enum CMD {
+	CMD_LOGIN,
+	CMD_LOGOUT,
+	CMD_ERROR
 };
+
+struct DataHeader {
+	short DataLength;
+	short Cmd;
+};
+
+struct Login {
+	char UserName[32];
+	char PassWord[32];
+};
+
+struct LoginResult {
+	int Result;
+};
+
+struct Logout {
+	char UserName[32];
+};
+
+struct LogoutResult {
+	int Result;
+};
+
 
 void SetColor(ForegroundColor foreColor, BackGroundColor backColor);
 
@@ -96,27 +120,48 @@ int main() {
 	}
 	SetColor(enmCFC_Black, enmCBC_Green);
 	std::cout << " --- 新客户端  Socket = " << Client <<  "   IP = " << inet_ntoa(ClientAddr.sin_addr) << std::endl;
-
-	char RecvBuf[128] = {};
-
-	// 5 send 向客户端发送一条消息
+	
 	while (1) {
-		int RecvLen = recv(Client, RecvBuf, 128, 0);
+		// 5 recv 接收客户端数据
+		DataHeader header{};
+		int RecvLen = recv(Client, (char*)&header, sizeof(DataHeader), 0);
 		if (RecvLen <= 0) {
 			SetColor(enmCFC_Red, enmCBC_Yellow);
 			std::cout << " --- Client 准备退出                        " << std::endl;
 			break;
 		}
 		SetColor(enmCFC_HighWhite, enmCBC_Black);
-		std::cout << " --- Client 请求 ：" << RecvBuf << std::endl;
+		std::cout << " --- Client 请求 CMD ：" << header.Cmd
+			<< " 长度 ：" << header.DataLength << std::endl;
 
-		if (0 == strcmp(RecvBuf, "getInfo")) {
-			DataPackage SendInfo{80,"Server"};
-			send(Client, (const char*)&SendInfo, sizeof(DataPackage) , 0);
+		// 6 send 处理客户端数据
+		switch (header.Cmd) {
+		case CMD_LOGIN:
+		{
+			Login login{};
+			recv(Client, (char*)&login, sizeof(Login), 0);
+			LoginResult ret{ 1 };
+			send(Client, (char*)&header, sizeof(DataHeader), 0);
+			send(Client, (char*)&ret, sizeof(LoginResult), 0);
+
 		}
-		else {
-			char SendBuf[] = "?????";
-			send(Client, SendBuf, sizeof(SendBuf) + 1, 0);
+		break;
+		case CMD_LOGOUT:
+		{
+			Logout logout{};
+			recv(Client, (char*)&logout, sizeof(Logout), 0);
+			LogoutResult ret{ 1 };
+			send(Client, (char*)&header, sizeof(DataHeader), 0);
+			send(Client, (char*)&ret, sizeof(LogoutResult), 0);
+		}
+		break;
+		default:
+		{
+			header.Cmd = CMD_ERROR;
+			header.DataLength = 0;
+			send(Client, (char*)&header, sizeof(DataHeader), 0);
+		}
+		break;
 		}
 	}
 
