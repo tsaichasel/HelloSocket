@@ -127,7 +127,7 @@ int main() {
 		// 4 处理请求命令
 		if (0 == strcmp(CmdBuf, "exit")) {
 			SetColor(enmCFC_Red, enmCBC_Yellow);
-			std::cout << " --- Client 准备退出                        " << std::endl;
+			std::cout << " --- Client 正在退出                        " << std::endl;
 			break;
 		}
 		else if (0 == strcmp(CmdBuf, "login")) {
