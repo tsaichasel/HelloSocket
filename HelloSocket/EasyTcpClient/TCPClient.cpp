@@ -140,6 +140,45 @@ int ClientProcessor(SOCKET Client) {
 	}
 }
 
+bool g_run = true;
+void cmdThread(SOCKET SockCli) {
+	while (true) {
+		// 3 输入请求命令
+		char CmdBuf[128] = {};
+		SetColor(enmCFC_HighWhite, enmCBC_Black);
+		std::cin >> CmdBuf;
+
+		// 4 处理请求命令
+		if (0 == strcmp(CmdBuf, "exit")) {
+			SetColor(enmCFC_Red, enmCBC_Yellow);
+			std::cout << " --- Client 正在退出                        " << std::endl;
+			g_run = false;
+			break;
+		}
+		else if (0 == strcmp(CmdBuf, "login")) {
+			// 5 向服务器发送命令
+			Login login;
+			login.Cmd = CMD_LOGIN;
+			login.DataLength = sizeof(login);
+			strcpy(login.UserName, "Tsai");
+			strcpy(login.PassWord, "TsaiPassword");
+			send(SockCli, (const char*)&login, sizeof(login), 0);
+		}
+		else if (0 == strcmp(CmdBuf, "logout")) {
+			// 5 向服务器发送命令
+			Logout logout;
+			logout.Cmd = CMD_LOGOUT;
+			logout.DataLength = sizeof(logout);
+			strcpy(logout.UserName, "Tsai");
+			send(SockCli, (const char*)&logout, sizeof(logout), 0);
+		}
+		else {
+			SetColor(enmCFC_Black, enmCBC_Red);
+			std::cout << " --- Client 输入命令不支持                  " << std::endl;
+		}
+	}
+}
+
 int main() {
 	//启动Windows socket 2.x环境
 	WORD Version = MAKEWORD(2, 2);
@@ -174,7 +213,12 @@ int main() {
 		std::cout << " --- 连接服务器成功 ！                              " << std::endl;
 	}
 
-	while (1) {
+	// 创建一个线程用于客户端发送请求
+	std::thread t1(cmdThread, SockCli);
+	t1.detach();
+
+	//采用全局变量判断是否线程退出(后期使用条件变量condition_variable - notify_one)
+	while (g_run) {
 		fd_set fdRead;
 		FD_ZERO(&fdRead);
 		FD_SET(SockCli, &fdRead);
@@ -195,9 +239,10 @@ int main() {
 			}
 		}
 
-		SetColor(enmCFC_Black, enmCBC_Yellow);
-		std::cout << " --- 现在Client Socket = " << std::setw(4) << std::setfill('0')
-			<< SockCli << " 处理自己的事情        " << std::endl;
+		//SetColor(enmCFC_Black, enmCBC_Yellow);
+		//std::cout << " --- 现在Client Socket = " << std::setw(4) << std::setfill('0')
+		//	<< SockCli << " 处理自己的事情        " << std::endl;
+		SetColor(enmCFC_HighWhite, enmCBC_Black);
 	}
 
 	// 4 关闭套子节
