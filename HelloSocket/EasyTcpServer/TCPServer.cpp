@@ -6,6 +6,7 @@
 #include <WinSock2.h>
 #include <iostream>
 #include <vector>
+#include<iomanip>
 #pragma comment(lib,"ws2_32.lib")
 
 enum ForegroundColor
@@ -40,6 +41,7 @@ enum CMD {
 	CMD_LOGIN_RESULT,
 	CMD_LOGOUT,
 	CMD_LOGOUT_RESULT,
+	CMD_NEW_USER_JOIN,
 	CMD_ERROR
 };
 
@@ -83,19 +85,28 @@ struct LogoutResult : public DataHeader {
 	int Result;
 };
 
+struct NewUserJion : public DataHeader {
+	NewUserJion() {
+		DataLength = sizeof(NewUserJion);
+		Cmd = CMD_NEW_USER_JOIN;
+		SockID = 0;
+	}
+	int SockID;
+};
+
 std::vector<SOCKET> g_Clients;
 
 void SetColor(ForegroundColor foreColor, BackGroundColor backColor);
 
-int Processor(SOCKET Client) {
+int ServerProcessor(SOCKET Client) {
 	// 5 recv 接收客户端数据
 	//缓冲区 （注：recv函数会一直接收直到返回值为 < 0阻塞在recv这里）
 	char szRecv[1024] = {};
 	int RecvLen = recv(Client, szRecv, sizeof(DataHeader), 0);
 	DataHeader* header = (DataHeader*)szRecv;
 	if (RecvLen <= 0) {
-		SetColor(enmCFC_Red, enmCBC_Yellow);
-		std::cout << " --- 新Client  Socket = " << Client << "   已经退出      " << std::endl;
+		SetColor(enmCFC_Black, enmCBC_HighWhite);
+		std::cout << " --- 收到Client Socket = " << std::setw(4) << std::setfill('0') << Client << " 已经退出              " << std::endl;
 		return -1;
 	}
 
@@ -106,7 +117,7 @@ int Processor(SOCKET Client) {
 		recv(Client, szRecv + sizeof(DataHeader), header->DataLength - sizeof(DataHeader), 0);
 		Login* login = (Login*)szRecv;
 		SetColor(enmCFC_HighWhite, enmCBC_Black);
-		std::cout << " --- Client 请求 CMD ：" << login->Cmd
+		std::cout << " --- 收到Client Socket = " << std::setw(4) << std::setfill('0') << Client << " 请求 CMD_LOGIN ：" << login->Cmd
 			<< " 长度 ：" << login->DataLength << " UserName ：" << login->UserName
 			<< " PassWord ：" << login->PassWord << std::endl;
 		LoginResult ret;
@@ -119,7 +130,7 @@ int Processor(SOCKET Client) {
 		recv(Client, szRecv + sizeof(DataHeader), header->DataLength - sizeof(DataHeader), 0);
 		Logout* logout = (Logout*)szRecv;
 		SetColor(enmCFC_HighWhite, enmCBC_Black);
-		std::cout << " --- Client 请求 CMD ：" << logout->Cmd
+		std::cout << " --- 收到Client Socket = " << std::setw(4) << std::setfill('0') << Client << " 请求 CMD_LOGOUT ：" << logout->Cmd
 			<< " 长度 ：" << logout->DataLength << " UserName ：" << logout->UserName << std::endl;
 		LoginResult ret;
 		ret.Result = 1;
@@ -148,11 +159,11 @@ int main() {
 	SOCKET SockSer = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (INVALID_SOCKET == SockSer) {
 		SetColor(enmCFC_Black, enmCBC_Red);
-		std::cout << " --- 建立SOCKET失败                         " << std::endl;
+		std::cout << " --- 建立SOCKET失败                                 " << std::endl;
 	}
 	else {
 		SetColor(enmCFC_Black, enmCBC_Cyan);
-		std::cout << " --- 建立SOCKET成功                         " << std::endl;
+		std::cout << " --- 建立SOCKET成功                                 " << std::endl;
 	}
 
 	// 2 bind 绑定用于接收客户端连接的网络端口
@@ -162,28 +173,28 @@ int main() {
 	addrSer.sin_addr.S_un.S_addr = INADDR_ANY ;//inet_addr("127.0.0.1");
 	if (SOCKET_ERROR == bind(SockSer, (sockaddr*)&addrSer, sizeof(addrSer))) {
 		SetColor(enmCFC_Black, enmCBC_Red);
-		std::cout << " --- 绑定端口失败                           " << std::endl;
+		std::cout << " --- 绑定端口失败                                   " << std::endl;
 	}
 	else {
 		SetColor(enmCFC_Black, enmCBC_Green);
-		std::cout << " --- 绑定端口成功                           " << std::endl;
+		std::cout << " --- 绑定端口成功                                   " << std::endl;
 	}
 	
 	// 3 listen 监听网络端口
 	if(SOCKET_ERROR == listen(SockSer, 5)) {
 		SetColor(enmCFC_Black, enmCBC_Red);
-		std::cout << " --- 监听端口失败                           " << std::endl;
+		std::cout << " --- 监听端口失败                                   " << std::endl;
 	}
 	else {
 		SetColor(enmCFC_Black, enmCBC_Cyan);
-		std::cout << " --- 监听端口成功                           " << std::endl;
+		std::cout << " --- 监听端口成功                                   " << std::endl;
 	}
 	
 	
 	int maxfd = SockSer + 1;
 	while (1) {
 		//select准备工作
-		//a.定义集合
+		//a.定义集合(描述符集合)
 		fd_set fdRead;
 		fd_set fdWrite;
 		fd_set fdExp;
@@ -204,11 +215,11 @@ int main() {
 		}
 
 		// 4 select轮询判断是否有新客户端连接或者客户端请求
-		timeval t{0,0};
+		timeval t{1,0};
 		int ret = select(maxfd, &fdRead, &fdWrite, &fdExp, &t);//最后一个设置为nullptr阻塞, 若将timeval赋值即等待timeval时间返回
 		if (ret < 0) {
 			SetColor(enmCFC_Red, enmCBC_Yellow);
-			std::cout << " --- Client select 结束                      " << std::endl;
+			std::cout << " --- Client select 结束                              " << std::endl;
 			break;
 		}
 
@@ -223,27 +234,38 @@ int main() {
 			Client = accept(SockSer, (sockaddr*)&ClientAddr, &nAddrLen);
 			if (INVALID_SOCKET == Client) {
 				SetColor(enmCFC_Black, enmCBC_Red);
-				std::cout << " --- 无效的客户端连接                       " << std::endl;
+				std::cout << " --- 无效的客户端连接                               " << std::endl;
 			}
-			g_Clients.push_back(Client);
+			else {
+				// 通知所有客户端有新的客户端加入
+				NewUserJion userJoin;
+				userJoin.SockID = Client;
+				for (size_t n = 0; n < g_Clients.size(); n++) {
+					send(g_Clients[n], (const char*)&userJoin, sizeof(NewUserJion), 0);
+				}
+				g_Clients.push_back(Client);
+				if (maxfd <= Client)
+					maxfd = Client + 1;
 
-			if (maxfd <= Client)
-				maxfd = Client + 1;
-
-			SetColor(enmCFC_Black, enmCBC_Blue);
-			std::cout << " --- 新Client  Socket = " << Client << "   IP = " 
-				<< inet_ntoa(ClientAddr.sin_addr) << std::endl;
+				SetColor(enmCFC_Black, enmCBC_Blue);
+				std::cout << " --- 收到Client Socket = " << std::setw(4) << std::setfill('0') << Client << " IP = "
+					<< inet_ntoa(ClientAddr.sin_addr) << "        " << std::endl;
+			}
 		}
 
 		// 6 处理Client发来的信息请求
 		for (size_t n = 0; n < fdRead.fd_count; n++) {
-			if (-1 == Processor(fdRead.fd_array[n])) {
+			if (-1 == ServerProcessor(fdRead.fd_array[n])) {
 				auto iter = find(g_Clients.begin(), g_Clients.end(), fdRead.fd_array[n]);
 				if (iter != g_Clients.end()) {
 					g_Clients.erase(iter);
 				}
 			}
 		}
+
+		SetColor(enmCFC_Black, enmCBC_Yellow);
+		std::cout << " --- 现在Server Socket = " << std::setw(4) << std::setfill('0') 
+			<< SockSer << " 处理自己的事情        " << std::endl;
 	}
 
 	for (size_t n = 0; n < g_Clients.size(); n++) {
@@ -253,7 +275,8 @@ int main() {
 	// 6 关闭套子节
 	closesocket(SockSer);
 	SetColor(enmCFC_Red, enmCBC_Yellow);
-	std::cout << " --- Server 已经结束                        " << std::endl;
+	std::cout << " --- Server 已经结束                                " << std::endl;
+	SetColor(enmCFC_HighWhite, enmCBC_Black);
 	getchar();
 	WSACleanup();
 	return 0;

@@ -5,6 +5,8 @@
 #include <Windows.h>
 #include <WinSock2.h>
 #include <iostream>
+#include<iomanip>
+#include <thread>
 #pragma comment(lib,"ws2_32.lib")
 
 enum ForegroundColor
@@ -39,6 +41,7 @@ enum CMD {
 	CMD_LOGIN_RESULT,
 	CMD_LOGOUT,
 	CMD_LOGOUT_RESULT,
+	CMD_NEW_USER_JOIN,
 	CMD_ERROR
 };
 
@@ -82,8 +85,60 @@ struct LogoutResult : public DataHeader {
 	int Result;
 };
 
+struct NewUserJion : public DataHeader {
+	NewUserJion() {
+		DataLength = sizeof(NewUserJion);
+		Cmd = CMD_NEW_USER_JOIN;
+		SockID = 0;
+	}
+	int SockID;
+};
+
 void SetColor(ForegroundColor foreColor, BackGroundColor backColor);
 
+int ClientProcessor(SOCKET Client) {
+	// 5 recv 接收客户端数据
+	//缓冲区 （注：recv函数会一直接收直到返回值为 < 0 阻塞在recv这里）
+	char szRecv[1024] = {};
+	int RecvLen = recv(Client, szRecv, sizeof(DataHeader), 0);
+	DataHeader* header = (DataHeader*)szRecv;
+	if (RecvLen <= 0) {
+		SetColor(enmCFC_Black, enmCBC_HighWhite);
+		std::cout << " --- 收到Server Socket = " << std::setw(4) << std::setfill('0') << Client << " 已经退出              " << std::endl;
+		return -1;
+	}
+
+	// 6 send 处理客户端数据
+	switch (header->Cmd) {
+		case CMD_LOGIN_RESULT:
+		{
+			recv(Client, szRecv + sizeof(DataHeader), header->DataLength - sizeof(DataHeader), 0);
+			LoginResult* loginresult = (LoginResult*)szRecv;
+			SetColor(enmCFC_HighWhite, enmCBC_Black);
+			std::cout << " --- 收到Server Socket = " << std::setw(4) << std::setfill('0') << Client << " 请求 CMD_LOGIN_RESULT ：" << loginresult->Cmd
+				<< " Result = " << loginresult->Result << " 长度 ：" << loginresult->DataLength << std::endl;
+		}
+		break;
+		case CMD_LOGOUT_RESULT:
+		{
+			recv(Client, szRecv + sizeof(DataHeader), header->DataLength - sizeof(DataHeader), 0);
+			LogoutResult* logoutresult = (LogoutResult*)szRecv;
+			SetColor(enmCFC_HighWhite, enmCBC_Black);
+			std::cout << " --- 收到Server Socket = " << std::setw(4) << std::setfill('0') << Client << " 请求 CMD_LOGOUT_RESULT ：" << logoutresult->Cmd
+				<< " Result = " << logoutresult->Result << " 长度 ：" << logoutresult->DataLength << std::endl;
+		}
+		break;
+		case CMD_NEW_USER_JOIN:
+		{
+			recv(Client, szRecv + sizeof(DataHeader), header->DataLength - sizeof(DataHeader), 0);
+			NewUserJion* userJion = (NewUserJion*)szRecv;
+			SetColor(enmCFC_HighWhite, enmCBC_Black);
+			std::cout << " --- 收到Server Socket = " << std::setw(4) << std::setfill('0') << Client << " 请求 CMD_NEW_USER_JOIN ：" << userJion->Cmd
+				<< " 新Client Socket = " << userJion->SockID << " 长度 ：" << userJion->DataLength << std::endl;
+		}
+		break;
+	}
+}
 
 int main() {
 	//启动Windows socket 2.x环境
@@ -96,11 +151,11 @@ int main() {
 	SOCKET SockCli = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 	if (INVALID_SOCKET == SockCli) {
 		SetColor(enmCFC_Black, enmCBC_Red);
-		std::cout << " --- 建立SOCKET失败 ！                      " << std::endl;
+		std::cout << " --- 建立SOCKET失败 ！                              " << std::endl;
 	}
 	else {
 		SetColor(enmCFC_Black, enmCBC_Cyan);
-		std::cout << " --- 建立SOCKET成功 ！                      " << std::endl;
+		std::cout << " --- 建立SOCKET成功 ！                              " << std::endl;
 	}
 
 	// 2 连接服务器 connect
@@ -112,70 +167,48 @@ int main() {
 	int ret = connect(SockCli, (sockaddr*)&addrSer, nAddrLen);
 	if (SOCKET_ERROR == ret) {
 		SetColor(enmCFC_Black, enmCBC_Red);
-		std::cout << " --- 连接服务器失败 ！                      " << std::endl;
+		std::cout << " --- 连接服务器失败 ！                              " << std::endl;
 	}
 	else {
 		SetColor(enmCFC_Black, enmCBC_Green);
-		std::cout << " --- 连接服务器成功 ！                      " << std::endl;
+		std::cout << " --- 连接服务器成功 ！                              " << std::endl;
 	}
 
 	while (1) {
-		// 3 输入请求命令
-		char CmdBuf[128] = {};
-		SetColor(enmCFC_HighWhite, enmCBC_Black);
-		std::cin >> CmdBuf;
-		// 4 处理请求命令
-		if (0 == strcmp(CmdBuf, "exit")) {
+		fd_set fdRead;
+		FD_ZERO(&fdRead);
+		FD_SET(SockCli, &fdRead);
+		timeval t{ 1,0 };
+		int ret = select(SockCli + 1, &fdRead, nullptr, nullptr, &t);
+		if (ret < 0) {
 			SetColor(enmCFC_Red, enmCBC_Yellow);
-			std::cout << " --- Client 正在退出                        " << std::endl;
+			std::cout << " --- Client select 结束1                            " << std::endl;
 			break;
 		}
-		else if (0 == strcmp(CmdBuf, "login")) {
-			// 5 向服务器发送命令
-			Login login;
-			login.Cmd = CMD_LOGIN;
-			login.DataLength = sizeof(login);
-			strcpy(login.UserName, "Tsai");
-			strcpy(login.PassWord, "MyPassword");
-			send(SockCli, (const char*)&login, sizeof(login), 0);
-			
-			// 6 接收服务器信息 recv
-			LoginResult loginret;
-			int nLen;
-			nLen = recv(SockCli, (char*)&loginret, sizeof(loginret), 0);
-			SetColor(enmCFC_HighWhite, enmCBC_Black);
-			std::cout << " --- Server 回应 ： LoginResult : " << loginret.Result << std::endl;
+
+		if (FD_ISSET(SockCli, &fdRead)) {
+			FD_CLR(SockCli, &fdRead);
+			if (-1 == ClientProcessor(SockCli)) {
+				SetColor(enmCFC_Red, enmCBC_Yellow);
+				std::cout << " --- Client select 结束2                            " << std::endl;
+				break;
+			}
 		}
-		else if (0 == strcmp(CmdBuf, "logout")) {
-			// 5 向服务器发送命令
-			Logout logout;
-			logout.Cmd = CMD_LOGOUT;
-			logout.DataLength = sizeof(logout);
-			strcpy(logout.UserName, "Tsai");
-			send(SockCli, (const char*)&logout, sizeof(logout), 0);
-			
-			// 6 接收服务器信息 recv
-			LogoutResult logoutret;
-			int nLen;
-			nLen = recv(SockCli, (char*)&logoutret, sizeof(logoutret), 0);
-			SetColor(enmCFC_HighWhite, enmCBC_Black);
-			std::cout << " --- Server 回应 ： LogoutResult : " << logoutret.Result << std::endl;
-		}
-		else {
-			SetColor(enmCFC_Black, enmCBC_Red);
-			std::cout << " --- Client 输入命令不支持                  " << std::endl;
-		}
+
+		SetColor(enmCFC_Black, enmCBC_Yellow);
+		std::cout << " --- 现在Client Socket = " << std::setw(4) << std::setfill('0')
+			<< SockCli << " 处理自己的事情        " << std::endl;
 	}
 
 	// 4 关闭套子节
 	closesocket(SockCli);
 	SetColor(enmCFC_Red, enmCBC_Yellow);
-	std::cout << " --- Client 已经结束                        " << std::endl;
+	std::cout << " --- Client 已经结束                                " << std::endl;
+	SetColor(enmCFC_HighWhite, enmCBC_Black);
 	getchar();
 	WSACleanup();
 	return 0;
 }
-
 
 void SetColor(ForegroundColor foreColor, BackGroundColor backColor)
 {
