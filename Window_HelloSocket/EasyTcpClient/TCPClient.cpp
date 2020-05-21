@@ -2,12 +2,23 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 
-#include <Windows.h>
-#include <WinSock2.h>
+#ifdef _WIN32
+	#include <Windows.h>
+	#include <WinSock2.h>
+	#pragma comment(lib,"ws2_32.lib")
+#else
+	#include <unistd.h>
+	#include <arpa/inet.h>
+	#include <string.h>
+	#define SOCKET int
+	#define INVALID_SOCKET  (SOCKET)(~0)
+	#define SOCKET_ERROR            (-1)
+#endif
+
 #include <iostream>
 #include<iomanip>
 #include <thread>
-#pragma comment(lib,"ws2_32.lib")
+
 
 enum ForegroundColor
 {
@@ -180,10 +191,12 @@ void cmdThread(SOCKET SockCli) {
 }
 
 int main() {
+#ifdef _WIN32
 	//启动Windows socket 2.x环境
 	WORD Version = MAKEWORD(2, 2);
 	WSADATA wsadata;
 	WSAStartup(Version, &wsadata);
+#endif
 
 	//-- 用Socket API建立简易的TCP客户端
 	// 1 建立一个socket
@@ -201,7 +214,11 @@ int main() {
 	sockaddr_in addrSer = {};
 	addrSer.sin_family = AF_INET;
 	addrSer.sin_port = htons(4567);//host to net unsigned short
+#ifdef _WIN32
 	addrSer.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+#else
+	addrSer.sin_addr.s_addr = inet_addr("192.168.63.1");
+#endif
 	int nAddrLen = sizeof(sockaddr_in);
 	int ret = connect(SockCli, (sockaddr*)&addrSer, nAddrLen);
 	if (SOCKET_ERROR == ret) {
@@ -246,12 +263,16 @@ int main() {
 	}
 
 	// 4 关闭套子节
+#ifdef _WIN32
 	closesocket(SockCli);
+	WSACleanup();
+#else
+	close(SockCli);
+#endif
 	SetColor(enmCFC_Red, enmCBC_Yellow);
 	std::cout << " --- Client 已经结束                                " << std::endl;
 	SetColor(enmCFC_HighWhite, enmCBC_Black);
 	getchar();
-	WSACleanup();
 	return 0;
 }
 
